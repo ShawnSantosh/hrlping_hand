@@ -2,8 +2,10 @@ from flask import Flask, request, render_template, redirect, url_for, flash,sess
 import os
 from werkzeug.utils import secure_filename
 import pymysql
+from flask_mysqldb import *
 
 app = Flask(__name__)
+mysql=MySQL(app)
 app.secret_key = "your_secret_key"
 
 # Configure upload folder
@@ -13,15 +15,12 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Allowed extensions for file upload
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# Database connection
-def db_connection():
-    return pymysql.connect(
-        host='localhost',
-        user='root',
-        password='sshawn7820@',
-        database='helpinghand',
-        cursorclass=pymysql.cursors.DictCursor
-    )
+
+# MySQL Configuration
+app.config['MYSQL_HOST'] = 'localhost'
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = 'sshawn7820@'
+app.config['MYSQL_DB'] = 'helpinghand'
 
 # Function to check allowed file extensions
 def allowed_file(filename):
@@ -55,7 +54,7 @@ def volunteer():
 
         # Save data to database
         try:
-            conn = db_connection()
+            conn = db.connect()
             with conn.cursor() as cursor:
                 sql = """
                     INSERT INTO volunteer (image, name, age, phone, address, password)
@@ -132,10 +131,45 @@ def agent_login():
             conn.close()
 
     return render_template('agent.html')
-@app.route('/admin',methods=['GET','POST'])
-def admin():
-    return render_template('admin.html')
-           
+
+
+@app.route("/admin")
+def login():
+   return render_template("admin.html")
+
+
+@app.route("/admin", methods=['post'])
+def createsession():
+   username = request.form['username']
+   password = request.form['password']
+   dbconn = mysql.connect
+   cursor = dbconn.cursor()
+   cursor.execute('select username, password from admin where username = %s and password = %s', (username, password,))
+   user = cursor.fetchone()
+   if user:
+      session['loggedin'] = True
+      session['username'] = user[0]
+      return render_template("admin_profile.html", message = 'Logged in successfully.')
+   else:
+      return render_template("admin.html", message = 'Incorrect username or password.')
+
+
+@app.route("/showpage")
+def showpage():
+    if 'loggedin' in session:
+        return render_template("showpage.html", username=session['username'])
+    else:
+        flash("Please log in first!")
+        return redirect(url_for("login_page"))    
+   
+@app.route("/admin_profile")
+def admin_profile():
+    if 'loggedin' in session:
+        return render_template("admin_profile.html", username=session['username'])
+    else:
+        flash("Please log in first!")
+        return redirect(url_for("admin"))
+
 
 # Route for Agent Profile
 @app.route('/agent/profile/<int:agent_id>')
